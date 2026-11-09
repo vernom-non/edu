@@ -1,0 +1,34 @@
+{
+  "name": "little-genius-eduexplore",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Little Genius (EduExplore) – Nền tảng giáo dục 24/7 trên Cloudflare: 8 môn học, 36 dạng bài tập, Cỗ máy tò mò & 5 Dự án liên môn",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "node --test src/**/*.test.ts",
+    "d1:verify": "rm -f /tmp/lg_d1.sqlite && sqlite3 /tmp/lg_d1.sqlite < migrations/0001_little_genius_schema.sql && sqlite3 /tmp/lg_d1.sqlite < migrations/0002_seed_ecosystem.sql",
+    "cf:dry-run": "HOME=/tmp XDG_CONFIG_HOME=/tmp/wrangler-config WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/wrangler-logs wrangler deploy --dry-run --env production",
+    "cf:deploy:staging": "wrangler deploy --env staging",
+    "cf:deploy:production": "wrangler deploy --env production",
+    "cf:rollback": "wrangler rollback --env production"
+  },
+  "dependencies": {
+    "lucide-react": "1.16.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@types/node": "25.9.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.0.2",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vite": "8.1.4",
+    "wrangler": "4.111.0"
+  }
+}
