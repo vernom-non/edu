@@ -236,7 +236,7 @@ export function validateLesson(lesson: FocusLesson): string[] {
 
 export function validateSubjectContent(subject: string, topics: FocusTopic[], lessons: FocusLesson[]): string[] {
   const errors: string[] = [];
-  if (topics.length !== 8) errors.push(`${subject}: cần 8 chủ đề (đang có ${topics.length})`);
+  if (topics.length < 8) errors.push(`${subject}: cần ít nhất 8 chủ đề (đang có ${topics.length})`);
   const planIds = new Set<string>();
   topics.forEach((t, i) => {
     if (t.subject !== subject) errors.push(`${t.id}: sai môn`);
