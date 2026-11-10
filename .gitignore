@@ -39,6 +39,10 @@ yarn-error.log*
 # Test coverage
 coverage/
 
+# Supabase local development
+.supabase/
+supabase/functions/.next/
+
 # SQLite temp dbs
 *.sqlite
 /tmp/*
