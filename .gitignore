@@ -14,10 +14,11 @@ build/
 .env.*.local
 !.env.example
 
-# Cloudflare Wrangler
+# Cloudflare Wrangler (đã chuyển sang Supabase)
 .wrangler/
 .wrangler.toml
 wrangler.toml
+wrangler.jsonc
 
 # OS
 .DS_Store

@@ -1,0 +1,14 @@
+[project]
+name = "little-genius-eduexplore"
+slug = "little-genius-eduexplore"
+region = "ap-southeast-1" # hoặc region gần bạn nhất
+
+[db]
+major_version = 15
+
+[auth]
+external_email_enabled = true
+email_autoconfirm = false
+
+[storage]
+enabled = true
