@@ -1,7 +1,7 @@
 // ============================================================================
 // Little Genius (EduExplore) – Giao diện Tối giản & Tập trung (UI/UX Redesign)
 // Triết lý: ÍT THÀNH PHẦN HƠN – TẬP TRUNG HƠN – DỄ THAO TÁC HƠN – HỌC HIỆU QUẢ HƠN
-// - Trang chủ chỉ gồm 4 khu vực: Tiếp tục học, Khám phá môn học, Khám phá hôm nay, Xưởng sáng tạo
+// - Trang chủ gồm Học tiếp, năm môn chính và Khám phá hôm nay
 // - Điều hướng tối giản 4 mục: Trang chủ, Môn học, Khám phá, Của em
 // - Progressive Disclosure: Chọn Môn → Chọn Chủ đề → Mở Bài học
 // ============================================================================
@@ -25,7 +25,8 @@ import type {
   UserRole,
 } from './types/education.ts';
 import { computeMasteryLevel } from './engine/learningEngine.ts';
-import { knowledgeForLesson, knowledgeSubject } from './learning/knowledge/catalog.ts';
+import { KNOWLEDGE_CARDS, knowledgeForLesson, knowledgeSubject } from './learning/knowledge/catalog.ts';
+import { recordActivity } from './learning/expansion/program.ts';
 import { recordReflection } from './learning/knowledge/notebook.ts';
 import type { KnowledgeCard, KnowledgeRecord } from './learning/knowledge/types.ts';
 import { KnowledgeLesson } from './components/knowledge/KnowledgeLesson.tsx';
@@ -288,6 +289,11 @@ export const App: React.FC = () => {
     SIMPLE_SUBJECT_CARDS.find((s) => s.id === activeLesson.subjectId) ??
     SIMPLE_SUBJECT_CARDS[0];
 
+  const lastCard = KNOWLEDGE_CARDS.find((card) => card.id === profile.lastKnowledgeCardId);
+  const lastCardStep = lastCard ? profile.knowledgeProgress?.[lastCard.id]?.lastStep : undefined;
+  const homeSubject = lastCard
+    ? SIMPLE_SUBJECT_CARDS.find((subject) => knowledgeSubject(subject.id) === lastCard.subject) ?? activeSubjectCard
+    : activeSubjectCard;
   const activeLessonProgress = profile.progressMap[activeLesson.id];
   const activeLessonDoneCount = activeLessonProgress?.completedTaskIds.length ?? 0;
   const activeLessonTotalCount = activeLesson.tasks.length;
@@ -314,12 +320,16 @@ export const App: React.FC = () => {
 
   const openKnowledge = (card: KnowledgeCard, entry: LessonEntry, from: 'knowledge' | 'notebook' | 'classroom') => {
     setKnowledgeLesson({ card, entry, from });
+    if (entry === 'concept' || entry === 'resume') {
+      setProfile((previous) => ({ ...previous, lastKnowledgeCardId: card.id }));
+    }
     setActiveNav('knowledge_lesson');
     window.scrollTo(0, 0);
   };
 
   const handleOpenLesson = (lessonId: string) => {
     setActiveLessonId(lessonId);
+    setProfile((previous) => previous.lastKnowledgeCardId ? { ...previous, lastKnowledgeCardId: undefined } : previous);
     setActiveNav('classroom');
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -601,12 +611,12 @@ export const App: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-extrabold text-[#263238] border border-[#D8CBF8]">
-                    <span>{activeSubjectCard.icon}</span>
-                    <span>{activeSubjectCard.shortName}</span>
+                    <span>{homeSubject.icon}</span>
+                    <span>{homeSubject.shortName}</span>
                   </div>
 
                   <h2 className="text-lg sm:text-xl font-extrabold text-[#263238]">
-                    {activeLesson.title}
+                    {lastCard?.title ?? activeLesson.title}
                   </h2>
 
                   {/* Thanh tiến độ đơn giản */}
@@ -614,14 +624,14 @@ export const App: React.FC = () => {
                     <div className="flex items-center justify-between text-xs font-bold text-[#546E7A]">
                       <span>Tiến độ bài học</span>
                       <span>
-                        {activeLessonDoneCount}/{activeLessonTotalCount} phần
+                        {lastCard ? `Bước ${(lastCardStep ?? 0) + 1}/6` : `${activeLessonDoneCount}/${activeLessonTotalCount} phần`}
                       </span>
                     </div>
                     <div className="w-full h-2.5 rounded-full bg-white overflow-hidden border border-[#D8CBF8]">
                       <div
                         className="h-full bg-[#A78BFA] rounded-full transition-all"
                         style={{
-                          width: `${Math.max(12, activeLessonPercent)}%`,
+                          width: `${Math.max(12, lastCard ? ((lastCardStep ?? 0) + 1) / 6 * 100 : activeLessonPercent)}%`,
                         }}
                       />
                     </div>
@@ -630,7 +640,12 @@ export const App: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => handleOpenLesson(activeLesson.id)}
+                  onClick={() => {
+                    if (lastCard) {
+                      setSelectedSubject(homeSubject.id);
+                      openKnowledge(lastCard, 'resume', 'knowledge');
+                    } else handleOpenLesson(activeLesson.id);
+                  }}
                   className="w-full sm:w-auto rounded-2xl bg-[#263238] hover:bg-[#37474F] text-white px-7 py-3.5 text-base font-extrabold min-h-[52px] shadow-xs active:scale-98 transition-transform"
                 >
                   Học tiếp →
@@ -644,8 +659,8 @@ export const App: React.FC = () => {
                 Khám phá môn học
               </h2>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {SIMPLE_SUBJECT_CARDS.map((sub) => (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                {SIMPLE_SUBJECT_CARDS.filter((subject) => knowledgeSubject(subject.id)).map((sub) => (
                   <button
                     key={sub.id}
                     type="button"
@@ -661,8 +676,8 @@ export const App: React.FC = () => {
               </div>
             </section>
 
-            {/* KHU VỰC C & D: KHÁM PHÁ HÔM NAY (1 Câu hỏi) & XƯỞNG SÁNG TẠO (1 Thẻ nhỏ) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* KHU VỰC C: KHÁM PHÁ HÔM NAY */}
+            <div>
               {/* C. Khám phá hôm nay: Chỉ 1 câu hỏi thú vị mỗi lần */}
               <section
                 aria-label="Khám phá hôm nay"
@@ -702,33 +717,6 @@ export const App: React.FC = () => {
                 </div>
               </section>
 
-              {/* D. Xưởng sáng tạo: 1 thẻ nhỏ gọn gàng */}
-              <section
-                aria-label="Xưởng sáng tạo"
-                className="rounded-2xl bg-[#FDF2F7] border border-[#F5B8D1] p-5 flex flex-col justify-between gap-4"
-              >
-                <div className="space-y-2">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-[#546E7A]">
-                    🎨 Xưởng sáng tạo
-                  </span>
-                  <h2 className="text-base sm:text-lg font-extrabold text-[#263238] leading-snug">
-                    Tự thiết kế khu vườn, cửa hàng bánh & mô hình của riêng con
-                  </h2>
-                </div>
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDiscoverMode('creative_projects');
-                      setActiveNav('discover');
-                    }}
-                    className="rounded-2xl bg-[#263238] hover:bg-[#37474F] text-white px-5 py-3 text-sm font-extrabold min-h-[48px]"
-                  >
-                    Bắt đầu
-                  </button>
-                </div>
-              </section>
             </div>
           </div>
         )}
@@ -1059,6 +1047,12 @@ export const App: React.FC = () => {
                 record={profile.knowledgeProgress?.[card.id] ?? {}}
                 onFavorite={() => toggleKnowledgeFavorite(card.id)}
                 onLearned={() => updateKnowledge(card.id, (record) => ({ ...record, learned: true }))}
+                onStep={(step) => {
+                  if (entry === 'concept' || entry === 'resume') {
+                    updateKnowledge(card.id, (record) => ({ ...record, lastStep: step }));
+                  }
+                }}
+                onActivity={(item, correct) => updateKnowledge(card.id, (record) => recordActivity(record, item, correct))}
                 onReflect={(item, review) => updateKnowledge(card.id, (record) => recordReflection(record, item, review))}
                 onLegacyPractice={linkedRoom ? () => handleOpenLesson(linkedRoom.id) : undefined}
               />

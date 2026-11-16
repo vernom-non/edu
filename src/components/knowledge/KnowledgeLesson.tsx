@@ -5,14 +5,23 @@ import type { KnowledgeCard, KnowledgeRecord } from '../../learning/knowledge/ty
 import {
   AnswerAndCompare, ConceptCard, FormulaCard, InteractiveExample, knowledgeButton, knowledgeInput, StepByStepExplanation,
 } from './KnowledgeCards.tsx';
+import { expandedLesson, type ExpandedLesson } from '../../learning/expansion/program.ts';
+import { RectangleModel } from './ActivityInputs.tsx';
+import { ExpandedPractice } from './ExpandedPractice.tsx';
 import { LinkedPractice, linkedTasks } from './LinkedPractice.tsx';
 import type { LessonEntry } from './KnowledgeNotebook.tsx';
 
-const steps = ['Hiểu khái niệm', 'Xem minh họa', 'Học quy tắc', 'Xem ví dụ', 'Tự thực hành', 'Ghi nhớ'];
-const startingStep = { concept: 0, examples: 3, practice: 4 };
+const steps = ['Hiểu khái niệm', 'Xem minh họa', 'Học quy tắc', 'Xem ví dụ', 'Tự thực hành', 'Con cần nhớ'];
+const startingStep = { concept: 0, examples: 3, practice: 4, review: 4, resume: 0 };
+
+function initialStep(entry: LessonEntry, saved?: number) {
+  return entry === 'resume' && saved !== undefined && Number.isInteger(saved) && saved >= 0 && saved < steps.length
+    ? saved
+    : startingStep[entry];
+}
 
 export function KnowledgeLesson({
-  card, entry, record, onFavorite, onLearned, onReflect, onLegacyPractice,
+  card, entry, record, onFavorite, onLearned, onReflect, onActivity, onStep, onLegacyPractice,
 }: {
   card: KnowledgeCard;
   entry: LessonEntry;
@@ -20,15 +29,21 @@ export function KnowledgeLesson({
   onFavorite: () => void;
   onLearned: () => void;
   onReflect: (item: string, review: boolean) => void;
+  onActivity: (item: string, correct: boolean) => void;
+  onStep: (step: number) => void;
   onLegacyPractice?: () => void;
 }) {
-  const [step, setStep] = useState(startingStep[entry]);
+  const [step, setStep] = useState(() => initialStep(entry, record.lastStep));
   const [example, setExample] = useState(0);
-  const [quickPractice, setQuickPractice] = useState(entry === 'practice');
+  const [quickPractice, setQuickPractice] = useState(entry === 'practice' || entry === 'review' || entry === 'resume');
+  const [challengeFirst, setChallengeFirst] = useState(false);
+  const expanded = expandedLesson(card.id);
   const heading = useRef<HTMLHeadingElement>(null);
   const subject = getSubjectMeta(card.subject);
   const go = (next: number) => {
     setStep(next);
+    onStep(next);
+    if (next === 5 && expanded?.tasks.every((task) => record.activityResults?.[task.id] === true)) onLearned();
     heading.current?.focus();
     heading.current?.scrollIntoView({ block: 'nearest' });
   };
@@ -36,7 +51,7 @@ export function KnowledgeLesson({
   return (
     <section className="mx-auto max-w-2xl space-y-4">
       <header className="space-y-1">
-        <p className="font-semibold text-slate-700">{subject.icon} {subject.name} · {card.topic}</p>
+        <p className="font-semibold text-slate-700">{subject.icon} {subject.name} · {card.topic}{expanded && ` · Lớp ${expanded.grade}`}</p>
         <h1 className="text-2xl font-extrabold sm:text-3xl">{card.title}</h1>
       </header>
       <section className="lg-card space-y-4 p-4 sm:p-6" aria-labelledby="knowledge-step">
@@ -44,8 +59,11 @@ export function KnowledgeLesson({
           <h2 ref={heading} tabIndex={-1} id="knowledge-step" className="text-xl font-extrabold">{steps[step]}</h2>
           <span aria-label={`Bước ${step + 1} trên ${steps.length}`} className="font-bold text-slate-700">{step + 1}/{steps.length}</span>
         </div>
-        {step === 0 && <ConceptCard card={card} />}
-        {step === 1 && <InteractiveExample card={card} />}
+        {step === 0 && <div className="space-y-3">
+          {expanded && <p className="font-semibold text-slate-700">{expanded.objective}</p>}
+          <ConceptCard card={card} />
+        </div>}
+        {step === 1 && (card.id === 'math-perimeter' ? <PerimeterExample /> : <InteractiveExample card={card} />)}
         {step === 2 && <FormulaCard rule={card.rule} example={card.examples[0]} />}
         {step === 3 && (
           <div className="space-y-4">
@@ -57,7 +75,9 @@ export function KnowledgeLesson({
             <StepByStepExplanation key={example} example={card.examples[example]} />
           </div>
         )}
-        {step === 4 && <Practice card={card} quick={quickPractice} onReflect={onReflect} onLegacyPractice={onLegacyPractice} />}
+        {step === 4 && <Practice card={card} quick={quickPractice} expanded={expanded} record={record} review={entry === 'review' || entry === 'resume'}
+          challengeFirst={challengeFirst} onChallengeChange={setChallengeFirst}
+          onActivity={onActivity} onReflect={onReflect} onLegacyPractice={onLegacyPractice} />}
         {step === 5 && (
           <>
             <dl className="space-y-3">
@@ -79,19 +99,34 @@ export function KnowledgeLesson({
         {step > 0 && <button className={knowledgeButton} onClick={() => go(step - 1)}>Quay lại</button>}
         {step < 5 && <button className="lg-btn-primary" onClick={() => go(step + 1)}>Tiếp theo</button>}
         {step < 4 && <button className={knowledgeButton} onClick={() => { setQuickPractice(true); go(4); }}>Luyện nhanh</button>}
+        {step === 0 && expanded && <button className={knowledgeButton} onClick={() => { setChallengeFirst(true); go(4); }}>Thử thách trước</button>}
       </nav>
     </section>
   );
 }
 
-function Practice({ card, quick, onReflect, onLegacyPractice }: {
+function Practice({ card, quick, expanded, record, review, challengeFirst, onChallengeChange, onActivity, onReflect, onLegacyPractice }: {
   card: KnowledgeCard;
   quick: boolean;
+  expanded?: ExpandedLesson;
+  review: boolean;
+  record: KnowledgeRecord;
+  challengeFirst: boolean;
+  onChallengeChange: (enabled: boolean) => void;
+  onActivity: (item: string, correct: boolean) => void;
   onReflect: (item: string, review: boolean) => void;
   onLegacyPractice?: () => void;
 }) {
-  const [mode, setMode] = useState<'guided' | 'solo' | 'linked'>(quick ? 'solo' : 'guided');
-  const [question, setQuestion] = useState(0);
+  const [mode, setMode] = useState<'guided' | 'solo' | 'activity' | 'linked'>(() => {
+    if (challengeFirst || (review && expanded
+      && (record.reviewItems?.some((item) => expanded.tasks.some((task) => task.id === item)) || !record.reviewItems?.length))) return 'activity';
+    if (review && record.reviewItems?.includes('guided')) return 'guided';
+    return quick ? 'solo' : 'guided';
+  });
+  const [question, setQuestion] = useState(() => {
+    const review = record.reviewItems?.find((item) => /^practice-[0-4]$/.test(item));
+    return quick && review ? Number(review.at(-1)) : 0;
+  });
   const focusId = card.focusLessonId;
   const hasLinked = focusId && linkedTasks(focusId).length > 0;
 
@@ -100,6 +135,7 @@ function Practice({ card, quick, onReflect, onLegacyPractice }: {
       <div className="flex flex-wrap gap-2" role="group" aria-label="Cách luyện tập">
         <button className={knowledgeButton} aria-pressed={mode === 'guided'} onClick={() => setMode('guided')}>Có hướng dẫn</button>
         <button className={knowledgeButton} aria-pressed={mode === 'solo'} onClick={() => setMode('solo')}>Tự luyện</button>
+        {expanded && <button className={knowledgeButton} aria-pressed={mode === 'activity'} onClick={() => setMode('activity')}>Hoạt động</button>}
         {hasLinked && <button className={knowledgeButton} aria-pressed={mode === 'linked'} onClick={() => setMode('linked')}>Bài tập liên quan</button>}
       </div>
       {mode === 'guided' && (
@@ -113,11 +149,31 @@ function Practice({ card, quick, onReflect, onLegacyPractice }: {
               {PRACTICE_LEVELS.map((level, index) => <option key={level} value={index}>{level}</option>)}
             </select>
           </label>
-          <AnswerAndCompare key={question} {...card.practice[question]} onReflect={(review) => onReflect(`practice-${question}`, review)} />
+          <AnswerAndCompare key={question} {...card.practice[question]} criteria={question === 4 ? expanded?.criteria : undefined} onReflect={(review) => onReflect(`practice-${question}`, review)} />
         </div>
       )}
+      {mode === 'activity' && expanded && <>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Chế độ hoạt động">
+          <button className={knowledgeButton} aria-pressed={!challengeFirst} onClick={() => onChallengeChange(false)}>Học từng bước</button>
+          <button className={knowledgeButton} aria-pressed={challengeFirst} onClick={() => onChallengeChange(true)}>Thử thách trước</button>
+        </div>
+        <ExpandedPractice key={String(challengeFirst)} lesson={expanded} record={record} challengeFirst={challengeFirst} onResult={onActivity} />
+      </>}
       {mode === 'linked' && focusId && <LinkedPractice lessonId={focusId} onReflect={onReflect} />}
       {onLegacyPractice && <button className={knowledgeButton} onClick={onLegacyPractice}>Mở phòng thực hành</button>}
     </div>
   );
+}
+
+function PerimeterExample() {
+  const [width, setWidth] = useState(4);
+  const [height, setHeight] = useState(3);
+  return <div className="space-y-3">
+    <p>Thay đổi độ dài hai cạnh. Mỗi màu đánh dấu một cặp cạnh bằng nhau.</p>
+    <RectangleModel width={width} height={height} max={8} perimeter onChange={(nextWidth, nextHeight) => {
+      setWidth(nextWidth);
+      setHeight(nextHeight);
+    }} />
+    <p className="font-bold" aria-live="polite">({width} + {height}) × 2 = {(width + height) * 2} đơn vị độ dài</p>
+  </div>;
 }

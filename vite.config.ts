@@ -1,3 +1,4 @@
+import { learningPath } from './src/learning/expansion/program.ts';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -9,6 +10,15 @@ import { EXERCISE_36_CATALOG, generateControlledMultiplicationVariant } from './
 export default defineConfig({
   build: {
     chunkSizeWarningLimit: 650,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'learning-content', test: /[/\\]src[/\\]learning[/\\](?:content|knowledge|expansion)[/\\]/ },
+          ],
+        },
+      },
+    },
   },
   plugins: [
     react(),
@@ -44,6 +54,17 @@ export default defineConfig({
               exerciseCatalog: EXERCISE_36_CATALOG,
             })
           );
+        });
+
+        server.middlewares.use('/api/learning-path', (req, res) => {
+          if (req.method !== 'GET') {
+            res.statusCode = 405;
+            res.end();
+            return;
+          }
+          const { searchParams } = new URL(req.url ?? '/', 'http://localhost');
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ lessons: learningPath(searchParams.get('subject'), searchParams.get('grade')) }));
         });
 
         server.middlewares.use('/api/exercises/variant', (req, res) => {

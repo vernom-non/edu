@@ -49,6 +49,8 @@ export interface KnowledgeRecord {
   favorite?: boolean;
   learned?: boolean;
   reviewItems?: string[];
+  activityResults?: Record<string, boolean>;
+  lastStep?: number;
 }
 
 export type KnowledgeProgress = Record<string, KnowledgeRecord>;

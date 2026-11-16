@@ -13,7 +13,7 @@ import { INITIAL_LESSONS } from '../data/curriculumData.ts';
 describe('EduExplore Full Application & Interactive Simulations Render Verification', () => {
   it('renders App, InteractiveClassroom (all 9 lessons), CreativeStudio, and RoleDashboards cleanly via Vite', async () => {
     const server = await createServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, ws: false },
       appType: 'custom',
       logLevel: 'error',
     });
@@ -42,7 +42,7 @@ describe('EduExplore Full Application & Interactive Simulations Render Verificat
         AdminCMSView,
       } = await server.ssrLoadModule('/src/components/dashboards/RoleDashboards.tsx');
 
-      // 1. Kiểm tra Trang chủ Tối giản (4 khu vực chính) & Điều hướng 4 mục
+      // 1. Kiểm tra Trang chủ Tối giản (3 khu vực chính) & Điều hướng 4 mục
       const homeHtml = renderToString(React.createElement(App));
       assert.ok(homeHtml.includes('EduExplore'));
       assert.ok(
@@ -52,7 +52,7 @@ describe('EduExplore Full Application & Interactive Simulations Render Verificat
       assert.ok(homeHtml.includes('Học tiếp'));
       assert.ok(homeHtml.includes('Khám phá môn học'));
       assert.ok(homeHtml.includes('Khám phá hôm nay'));
-      assert.ok(homeHtml.includes('Xưởng sáng tạo'));
+      assert.ok(!homeHtml.includes('aria-label="Xưởng sáng tạo"'));
       assert.ok(homeHtml.includes('Trang chủ'));
       assert.ok(homeHtml.includes('Môn học'));
       assert.ok(homeHtml.includes('Khám phá'));

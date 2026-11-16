@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { expandedLesson, quickReview } from '../../learning/expansion/program.ts';
 import { FOCUS_SUBJECTS } from '../../learning/catalog.ts';
 import { KNOWLEDGE_CARDS } from '../../learning/knowledge/catalog.ts';
 import { matchesKnowledge } from '../../learning/knowledge/notebook.ts';
@@ -7,7 +8,7 @@ import type { KnowledgeCard, KnowledgeProgress } from '../../learning/knowledge/
 import type { FocusSubjectId } from '../../learning/types.ts';
 import { knowledgeButton, knowledgeInput } from './KnowledgeCards.tsx';
 
-export type LessonEntry = 'concept' | 'examples' | 'practice';
+export type LessonEntry = 'concept' | 'examples' | 'practice' | 'review' | 'resume';
 
 export function KnowledgeNotebook({ notebook, initialSubject, progress, onOpen, onToggleFavorite }: {
   notebook: boolean;
@@ -18,11 +19,15 @@ export function KnowledgeNotebook({ notebook, initialSubject, progress, onOpen, 
 }) {
   const [subject, setSubject] = useState<FocusSubjectId | ''>(initialSubject ?? '');
   const [query, setQuery] = useState('');
+  const [grade, setGrade] = useState('');
   const [filter, setFilter] = useState<NotebookFilter>('all');
   const searchLabel = notebook ? 'Tìm trong sổ tay' : 'Tìm kiến thức';
   const visible = KNOWLEDGE_CARDS.filter((card) => (
-    (!subject || card.subject === subject) && matchesKnowledge(card, progress[card.id], query, filter, notebook)
+    (!subject || card.subject === subject)
+      && (!grade || (grade === 'all' ? !!expandedLesson(card.id) : expandedLesson(card.id)?.grade === Number(grade)))
+      && matchesKnowledge(card, progress[card.id], query, filter, notebook)
   ));
+  const review = notebook ? quickReview(progress, (id) => visible.some((card) => card.id === id)) : undefined;
   return (
     <section className="space-y-5">
       <h1 className="text-2xl font-extrabold sm:text-3xl">{notebook ? 'Sổ tay của em' : 'Thư viện kiến thức'}</h1>
@@ -38,11 +43,20 @@ export function KnowledgeNotebook({ notebook, initialSubject, progress, onOpen, 
             {FOCUS_SUBJECTS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
+        {!notebook && <label>
+          <span className="block font-bold mb-1">Bài học</span>
+          <select className={knowledgeInput} value={grade} onChange={(event) => setGrade(event.target.value)}>
+            <option value="">Toàn bộ thư viện</option>
+            <option value="all">25 bài có hoạt động</option>
+            <option value="3">Bài lớp 3</option><option value="4">Bài lớp 4</option><option value="5">Bài lớp 5</option>
+          </select>
+        </label>}
         {notebook && (
           <div className="flex flex-wrap gap-2 sm:col-span-2" role="group" aria-label="Lọc sổ tay">
             {([['all', 'Tất cả'], ['favorite', 'Yêu thích'], ['review', 'Cần ôn']] as const).map(([id, label]) => (
               <button key={id} className={knowledgeButton} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>
             ))}
+            {review && <button className="lg-btn-primary" onClick={() => onOpen(review, 'review')}>Ôn tập nhanh</button>}
           </div>
         )}
       </div>

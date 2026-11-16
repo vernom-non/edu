@@ -236,6 +236,7 @@ export interface StudentProfile {
   };
   progressMap: Record<string, LessonProgressRecord>;
   knowledgeProgress?: KnowledgeProgress;
+  lastKnowledgeCardId?: string;
   notebookEntries?: ScientistNoteEntry[];
   creativeProjects?: Record<string, CreativeProjectRecord>;
   achievements?: HealthyAchievement[];

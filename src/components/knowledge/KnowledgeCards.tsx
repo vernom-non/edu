@@ -95,12 +95,13 @@ export function StepByStepExplanation({ example }: { example: KnowledgeExample }
 }
 
 export function AnswerAndCompare({
-  prompt, answer, accepted, hints, onReflect,
+  prompt, answer, accepted, hints, criteria, onReflect,
 }: {
   prompt: string;
   answer: string;
   accepted?: readonly string[];
   hints?: readonly string[];
+  criteria?: readonly string[];
   onReflect: (needsReview: boolean) => void;
 }) {
   const [shownHints, setShownHints] = useState(0);
@@ -118,6 +119,12 @@ export function AnswerAndCompare({
           setChecked(undefined);
         }} />
       </label>
+      {criteria && <fieldset className="space-y-1 rounded-xl bg-[#F3EFFE] p-3">
+        <legend className="font-bold">Em tự rà lại bài</legend>
+        {criteria.map((criterion) => <label key={criterion} className="flex min-h-11 items-center gap-3">
+          <input type="checkbox" />{criterion}
+        </label>)}
+      </fieldset>}
       {!!shownHints && <ol className="list-decimal space-y-2 rounded-xl bg-[#F3EFFE] py-3 pl-8 pr-3" aria-live="polite">
         {hints?.slice(0, shownHints).map((hint) => <li key={hint}>{hint}</li>)}
       </ol>}

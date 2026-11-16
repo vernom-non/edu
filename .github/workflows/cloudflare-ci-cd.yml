@@ -28,8 +28,10 @@ jobs:
 
       - name: Validate Cloudflare D1 SQLite Schema & Seed Migrations
         run: |
-          sqlite3 /tmp/ci_d1.sqlite < migrations/0001_little_genius_schema.sql
-          sqlite3 /tmp/ci_d1.sqlite < migrations/0002_seed_ecosystem.sql
+          for migration in migrations/*.sql; do
+            sqlite3 -bail /tmp/ci_d1.sqlite < "$migration"
+          done
+          test -z "$(sqlite3 /tmp/ci_d1.sqlite 'PRAGMA foreign_key_check;')"
 
       - name: Run Unit, Integration, Security & SSR Render Tests
         run: npm test
@@ -51,7 +53,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply little-genius-db --env staging --remote
+        run: npx wrangler d1 migrations apply DB --env staging --remote
       - name: Deploy Worker & Assets to Staging
         if: env.CLOUDFLARE_API_TOKEN != ''
         env:
@@ -76,7 +78,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply little-genius-db --env production --remote
+        run: npx wrangler d1 migrations apply DB --env production --remote
       - name: Deploy Worker & Assets to Production
         if: env.CLOUDFLARE_API_TOKEN != ''
         env:

@@ -16,6 +16,7 @@ import {
   generateControlledMultiplicationVariant,
   type MultiplicationCognitiveMode,
 } from '../src/engine/exerciseBankEngine.ts';
+import { learningPath } from '../src/learning/expansion/program.ts';
 import { CURIOSITY_10_LIBRARY } from '../src/data/curiosityData.ts';
 import {
   checkRateLimit,
@@ -130,6 +131,10 @@ export default {
           exerciseCatalogCount: EXERCISE_36_CATALOG.length,
           curiosityQuestionsCount: CURIOSITY_10_LIBRARY.length,
         });
+      }
+
+      if (url.pathname === '/api/learning-path' && request.method === 'GET') {
+        return jsonResponse({ lessons: learningPath(url.searchParams.get('subject'), url.searchParams.get('grade')) });
       }
 
       // 4. Controlled Question Variant Endpoint (/api/exercises/variant)
@@ -268,7 +273,7 @@ export default {
       }
 
       // 9. Phân phối Static Assets cho SPA nếu chạy trên Cloudflare Workers Assets
-      if (env.ASSETS) {
+      if (!url.pathname.startsWith('/api/') && url.pathname !== '/api' && env.ASSETS) {
         return await env.ASSETS.fetch(request);
       }
 
