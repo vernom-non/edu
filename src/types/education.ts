@@ -4,6 +4,8 @@
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5;
 
+import type { KnowledgeProgress } from '../learning/knowledge/types.ts';
+
 export type SubjectId =
   | 'math'
   | 'science'
@@ -233,6 +235,7 @@ export interface StudentProfile {
     focusMode: boolean;
   };
   progressMap: Record<string, LessonProgressRecord>;
+  knowledgeProgress?: KnowledgeProgress;
   notebookEntries?: ScientistNoteEntry[];
   creativeProjects?: Record<string, CreativeProjectRecord>;
   achievements?: HealthyAchievement[];

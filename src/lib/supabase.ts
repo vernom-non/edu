@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // ============================================================================
 // Little Genius (EduExplore) – Supabase Client Singleton
 // Kết nối Supabase PostgreSQL từ frontend (Vite + React)
@@ -10,7 +11,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    '[Supabase] VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY chưa được cấu hình. '
+    '[Supabase] VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY chưa được cấu hình. ' +
     'Hãy copy .env.example sang .env và điền thông tin từ Supabase Dashboard.',
   );
 }

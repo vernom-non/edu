@@ -25,6 +25,11 @@ import type {
   UserRole,
 } from './types/education.ts';
 import { computeMasteryLevel } from './engine/learningEngine.ts';
+import { knowledgeForLesson, knowledgeSubject } from './learning/knowledge/catalog.ts';
+import { recordReflection } from './learning/knowledge/notebook.ts';
+import type { KnowledgeCard, KnowledgeRecord } from './learning/knowledge/types.ts';
+import { KnowledgeLesson } from './components/knowledge/KnowledgeLesson.tsx';
+import { KnowledgeNotebook, type LessonEntry } from './components/knowledge/KnowledgeNotebook.tsx';
 import { InteractiveClassroom } from './components/classroom/InteractiveClassroom.tsx';
 import { CreativeStudio } from './components/studio/CreativeStudio.tsx';
 import { ExerciseBankArena } from './components/exercises/ExerciseBankArena.tsx';
@@ -39,7 +44,7 @@ import {
 } from './components/dashboards/RoleDashboards.tsx';
 
 // 4 Mục điều hướng chính tối giản + màn hình Phòng học tập trung
-export type PrimaryNavTab = 'home' | 'subjects' | 'discover' | 'me' | 'classroom';
+export type PrimaryNavTab = 'home' | 'subjects' | 'discover' | 'me' | 'classroom' | 'knowledge' | 'notebook' | 'knowledge_lesson';
 export type DiscoverMode = 'curiosity' | 'creative_projects' | 'studio' | 'exercises';
 
 const STORAGE_KEY_PROFILE = 'eduexplore_student_profile_v2';
@@ -232,6 +237,11 @@ export const App: React.FC = () => {
 
   // Điều hướng tối giản 4 mục chính + Phòng học
   const [activeNav, setActiveNav] = useState<PrimaryNavTab>('home');
+  const [knowledgeLesson, setKnowledgeLesson] = useState<{
+    card: KnowledgeCard;
+    entry: LessonEntry;
+    from: 'knowledge' | 'notebook' | 'classroom';
+  }>();
   const [discoverMode, setDiscoverMode] = useState<DiscoverMode>('curiosity');
 
   // Progressive Disclosure trên trang Môn học:
@@ -287,6 +297,26 @@ export const App: React.FC = () => {
 
   const dailyCuriosity =
     CURIOSITY_10_LIBRARY[dailyCuriosityIndex % CURIOSITY_10_LIBRARY.length];
+
+  const updateKnowledge = (id: string, update: (record: KnowledgeRecord) => KnowledgeRecord) => {
+    setProfile((previous) => ({
+      ...previous,
+      knowledgeProgress: {
+        ...previous.knowledgeProgress,
+        [id]: update(previous.knowledgeProgress?.[id] ?? {}),
+      },
+    }));
+  };
+
+  const toggleKnowledgeFavorite = (id: string) => {
+    updateKnowledge(id, (record) => ({ ...record, favorite: !record.favorite }));
+  };
+
+  const openKnowledge = (card: KnowledgeCard, entry: LessonEntry, from: 'knowledge' | 'notebook' | 'classroom') => {
+    setKnowledgeLesson({ card, entry, from });
+    setActiveNav('knowledge_lesson');
+    window.scrollTo(0, 0);
+  };
 
   const handleOpenLesson = (lessonId: string) => {
     setActiveLessonId(lessonId);
@@ -462,6 +492,11 @@ export const App: React.FC = () => {
 
   const isFocusClassroom =
     activeNav === 'classroom' && profile.accessibility.focusMode;
+  const knowledgeSource = activeNav === 'knowledge_lesson' ? knowledgeLesson?.from : activeNav;
+  const knowledgeList = knowledgeSource === 'knowledge' || knowledgeSource === 'notebook' ? knowledgeSource : undefined;
+  const selectedTab = knowledgeSource === 'notebook' ? 'me'
+    : knowledgeSource === 'knowledge' || knowledgeSource === 'classroom' ? 'subjects' : activeNav;
+  const lessonKnowledge = knowledgeForLesson(activeLesson.id);
 
   return (
     <div
@@ -500,9 +535,7 @@ export const App: React.FC = () => {
               className="hidden md:flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-[#E6E4DD]"
             >
               {PRIMARY_TABS.map((tab) => {
-                const isActive =
-                  activeNav === tab.id ||
-                  (activeNav === 'classroom' && tab.id === 'subjects');
+                const isActive = selectedTab === tab.id;
                 return (
                   <button
                     key={tab.id}
@@ -729,6 +762,15 @@ export const App: React.FC = () => {
                 );
               })}
             </div>
+
+            {selectedSubject && knowledgeSubject(selectedSubject) && (
+              <button className="lg-btn-primary" onClick={() => {
+                setActiveNav('knowledge');
+                window.scrollTo(0, 0);
+              }}>
+                📚 Thư viện kiến thức
+              </button>
+            )}
 
             {selectedSubject && (() => {
               const currentSubCard =
@@ -986,22 +1028,72 @@ export const App: React.FC = () => {
         {/* ================================================================ */}
         {/* 3. PHÒNG HỌC TƯƠNG TÁC (TẬP TRUNG 1 NHIỆM VỤ MỖI MÀN HÌNH)      */}
         {/* ================================================================ */}
+        {knowledgeList && (
+          <div className="space-y-4" hidden={activeNav === 'knowledge_lesson'}>
+            <button className="lg-btn-soft" onClick={() => setActiveNav(knowledgeList === 'notebook' ? 'me' : 'subjects')}>
+              {knowledgeList === 'notebook' ? '← Của em' : '← Môn học'}
+            </button>
+            <KnowledgeNotebook
+              key={knowledgeList}
+              notebook={knowledgeList === 'notebook'}
+              initialSubject={knowledgeList === 'knowledge' && selectedSubject ? knowledgeSubject(selectedSubject) : undefined}
+              progress={profile.knowledgeProgress ?? {}}
+              onOpen={(card, entry) => openKnowledge(card, entry, knowledgeList)}
+              onToggleFavorite={toggleKnowledgeFavorite}
+            />
+          </div>
+        )}
+
+        {activeNav === 'knowledge_lesson' && knowledgeLesson && (() => {
+          const { card, entry, from } = knowledgeLesson;
+          const linkedRoom = lessons.find((lesson) => lesson.id === card.lessonId);
+          return (
+            <div className="space-y-4">
+              <button className="lg-btn-soft" onClick={() => setActiveNav(from)}>
+                {from === 'notebook' ? '← Sổ tay của em' : from === 'classroom' ? '← Phòng thực hành' : '← Thư viện kiến thức'}
+              </button>
+              <KnowledgeLesson
+                key={card.id}
+                card={card}
+                entry={entry}
+                record={profile.knowledgeProgress?.[card.id] ?? {}}
+                onFavorite={() => toggleKnowledgeFavorite(card.id)}
+                onLearned={() => updateKnowledge(card.id, (record) => ({ ...record, learned: true }))}
+                onReflect={(item, review) => updateKnowledge(card.id, (record) => recordReflection(record, item, review))}
+                onLegacyPractice={linkedRoom ? () => handleOpenLesson(linkedRoom.id) : undefined}
+              />
+            </div>
+          );
+        })()}
+
         {activeNav === 'classroom' && (
-          <InteractiveClassroom
-            lesson={activeLesson}
-            progress={profile.progressMap[activeLesson.id]}
-            voiceEnabled={profile.accessibility.voiceGuide}
-            reducedMotion={profile.accessibility.reducedMotion}
-            focusMode={profile.accessibility.focusMode}
-            onToggleFocusMode={() => toggleAccessibility('focusMode')}
-            onUpdateProgress={handleUpdateProgress}
-            onBackToCatalog={() => setActiveNav('subjects')}
-            onNextLesson={() => {
-              const idx = lessons.findIndex((l) => l.id === activeLesson.id);
-              const next = lessons[(idx + 1) % lessons.length];
-              handleOpenLesson(next.id);
-            }}
-          />
+          <div className="space-y-4">
+            {!isFocusClassroom && lessonKnowledge.length > 0 && (
+              <details className="lg-card px-4 py-2">
+                <summary className="flex min-h-11 cursor-pointer items-center font-bold">📚 Kiến thức trước khi thực hành</summary>
+                <div className="flex flex-wrap gap-2 pb-2">
+                  {lessonKnowledge.map((card) => (
+                    <button className="lg-btn-soft" key={card.id} onClick={() => openKnowledge(card, 'concept', 'classroom')}>{card.title}</button>
+                  ))}
+                </div>
+              </details>
+            )}
+            <InteractiveClassroom
+              lesson={activeLesson}
+              progress={profile.progressMap[activeLesson.id]}
+              voiceEnabled={profile.accessibility.voiceGuide}
+              reducedMotion={profile.accessibility.reducedMotion}
+              focusMode={profile.accessibility.focusMode}
+              onToggleFocusMode={() => toggleAccessibility('focusMode')}
+              onUpdateProgress={handleUpdateProgress}
+              onBackToCatalog={() => setActiveNav('subjects')}
+              onNextLesson={() => {
+                const idx = lessons.findIndex((l) => l.id === activeLesson.id);
+                const next = lessons[(idx + 1) % lessons.length];
+                handleOpenLesson(next.id);
+              }}
+            />
+          </div>
         )}
 
         {/* ================================================================ */}
@@ -1075,6 +1167,10 @@ export const App: React.FC = () => {
         {/* ================================================================ */}
         {activeNav === 'me' && (
           <div className="space-y-6">
+            <button className="lg-btn-primary" onClick={() => {
+              setActiveNav('notebook');
+              window.scrollTo(0, 0);
+            }}>📒 Sổ tay của em</button>
             {/* Chọn lớp học đơn giản cho bé */}
             <section className="lg-card p-5 space-y-3">
               <div className="flex items-center justify-between">
@@ -1247,9 +1343,7 @@ export const App: React.FC = () => {
         >
           <div className="grid grid-cols-4 gap-1 max-w-md mx-auto">
             {PRIMARY_TABS.map((tab) => {
-              const isActive =
-                activeNav === tab.id ||
-                (activeNav === 'classroom' && tab.id === 'subjects');
+              const isActive = selectedTab === tab.id;
               return (
                 <button
                   key={tab.id}
