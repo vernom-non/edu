@@ -45,4 +45,6 @@ supabase/functions/.next/
 
 # SQLite temp dbs
 *.sqlite
-/tmp/*
+/tmp/*.dev.vars
+supabase/.temp/
+supabase/.branches/
