@@ -1,17 +1,86 @@
-# wrangler.toml – Cấu hình Cloudflare Pages / Workers
+# ============================================================================
+# Little Genius (EduExplore) – Cloudflare 24/7 Production Config (wrangler.toml)
+# Kết nối Supabase PostgreSQL (https://bdwzkdrxrwkulyaiadso.supabase.co)
+# + Cloudflare Workers + Static Assets (./dist) + D1 + KV + Cron Triggers
+# ============================================================================
 name = "little-genius-eduexplore"
-compatibility_date = "2026-11-16"
+main = "worker/index.ts"
+compatibility_date = "2025-04-01"
 
-# Build output cho Cloudflare Pages
-[build]
-command = "npm run build"
-functions = "functions"
-publish = "dist"
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Phân phối Frontend React 19 + Vite qua Cloudflare Global CDN + Static Assets
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Cron Trigger chạy định kỳ lúc 03:00 UTC mỗi ngày để dọn dẹp cache & kiểm tra kết nối 24/7
+[triggers]
+crons = ["0 3 * * *"]
 
 [vars]
 APP_ENV = "production"
 DEPLOYMENT_VERSION = "2.0.0-production"
-
-[env.production]
+AI_PROVIDER = "rule_based"
 VITE_SUPABASE_URL = "https://bdwzkdrxrwkulyaiadso.supabase.co"
-VITE_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"
+SUPABASE_STORAGE_BUCKET = "little-genius-media"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "little-genius-db-prod"
+database_id = "baf07634-6050-4e5f-9d3d-777e275710d5"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "dfb18490d2b641a1905ef8293f6e4fe9"
+
+# ============================================================================
+# Môi trường Staging (--env staging)
+# ============================================================================
+[env.staging]
+name = "little-genius-staging"
+
+[env.staging.vars]
+APP_ENV = "staging"
+DEPLOYMENT_VERSION = "2.0.0-staging"
+AI_PROVIDER = "rule_based"
+VITE_SUPABASE_URL = "https://bdwzkdrxrwkulyaiadso.supabase.co"
+SUPABASE_STORAGE_BUCKET = "little-genius-media"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "little-genius-db-staging"
+database_id = "13098bd4-92ee-402d-94b1-c0659f24e1c6"
+migrations_dir = "migrations"
+
+[[env.staging.kv_namespaces]]
+binding = "CONFIG_KV"
+id = "7ccad247895e4234bfd2f5c5a93cff5d"
+
+# ============================================================================
+# Môi trường Production (--env production)
+# ============================================================================
+[env.production]
+name = "little-genius-production"
+
+[env.production.vars]
+APP_ENV = "production"
+DEPLOYMENT_VERSION = "2.0.0-production"
+AI_PROVIDER = "rule_based"
+VITE_SUPABASE_URL = "https://bdwzkdrxrwkulyaiadso.supabase.co"
+SUPABASE_STORAGE_BUCKET = "little-genius-media"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "little-genius-db-prod"
+database_id = "baf07634-6050-4e5f-9d3d-777e275710d5"
+migrations_dir = "migrations"
+
+[[env.production.kv_namespaces]]
+binding = "CONFIG_KV"
+id = "dfb18490d2b641a1905ef8293f6e4fe9"

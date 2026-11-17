@@ -1,4 +1,4 @@
-name: Little Genius Cloudflare CI/CD Pipeline
+name: Little Genius Cloudflare & Supabase 24/7 CI/CD Pipeline
 
 on:
   push:
@@ -8,8 +8,11 @@ on:
 
 jobs:
   verify-and-test:
-    name: Typecheck, Unit, Integration, D1 Schema & Build
+    name: Typecheck, Unit, Integration, Schema & Build
     runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://bdwzkdrxrwkulyaiadso.supabase.co' }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,7 +29,7 @@ jobs:
       - name: TypeScript Strict Check & Production Build
         run: npm run build
 
-      - name: Validate Cloudflare D1 SQLite Schema & Seed Migrations
+      - name: Validate Database Migrations
         run: |
           for migration in migrations/*.sql; do
             sqlite3 -bail /tmp/ci_d1.sqlite < "$migration"
@@ -36,11 +39,19 @@ jobs:
       - name: Run Unit, Integration, Security & SSR Render Tests
         run: npm test
 
+      - name: Verify Cloudflare Worker Bundle (Dry-run)
+        run: npm run cf:dry-run
+
   deploy-staging:
     name: Deploy Preview to Cloudflare Staging
     needs: verify-and-test
     if: github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://bdwzkdrxrwkulyaiadso.supabase.co' }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,17 +59,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci && npm run build
-      - name: Apply D1 Migrations (Staging)
+      - name: Deploy Worker & Static Assets to Staging
         if: env.CLOUDFLARE_API_TOKEN != ''
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply DB --env staging --remote
-      - name: Deploy Worker & Assets to Staging
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env staging
 
   deploy-production:
@@ -66,6 +68,11 @@ jobs:
     needs: verify-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://bdwzkdrxrwkulyaiadso.supabase.co' }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,15 +80,6 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci && npm run build
-      - name: Apply D1 Migrations (Production)
+      - name: Deploy Worker & Static Assets to Production 24/7
         if: env.CLOUDFLARE_API_TOKEN != ''
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply DB --env production --remote
-      - name: Deploy Worker & Assets to Production
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env production

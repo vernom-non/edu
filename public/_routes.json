@@ -1,5 +1,5 @@
 {
-  "include": ["/*"],
-  "exclude": ["/assets/*", "/favicon.ico", "/manifest.webmanifest"],
-  "fallback": "/index.html"
+  "version": 1,
+  "include": ["/api/*"],
+  "exclude": ["/assets/*", "/favicon.ico", "/manifest.webmanifest", "/sw.js"]
 }

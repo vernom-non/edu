@@ -8,16 +8,16 @@ dist/
 build/
 *.tsbuildinfo
 
-# Environment files
+# Environment & Local Secret files (Never commit secrets)
 .env
 .env.local
 .env.*.local
+.dev.vars
+.dev.vars.*
 !.env.example
 
-# Cloudflare Wrangler (local cache only, not config)
+# Cloudflare Wrangler local state
 .wrangler/
-.wrangler.toml
-wrangler.jsonc
 
 # OS
 .DS_Store
@@ -41,9 +41,9 @@ coverage/
 # Supabase local development
 .supabase/
 supabase/functions/.next/
+supabase/.temp/
+supabase/.branches/
 
 # SQLite temp dbs
 *.sqlite
-/tmp/*.dev.vars
-supabase/.temp/
-supabase/.branches/
+/tmp/

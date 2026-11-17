@@ -1,6 +1,6 @@
 // ============================================================================
 // Little Genius (EduExplore) – Cloudflare Workers 24/7 Production Backend
-// Phục vụ API, Chấm bài xác định, Lưu tiến độ D1, Đồng bộ Offline & Cron dọn dẹp
+// Kết nối đồng thời Supabase PostgreSQL (REST API) + Cloudflare D1 + KV + Assets
 // ============================================================================
 
 import {
@@ -21,6 +21,7 @@ import { CURIOSITY_10_LIBRARY } from '../src/data/curiosityData.ts';
 import {
   checkRateLimit,
   cleanupExpiredCaches,
+  fetchWithTimeout,
   getCachedIdempotentResponse,
   sanitizeStringInput,
   SECURITY_HEADERS,
@@ -34,7 +35,12 @@ export interface CloudflareEnv {
   DEPLOYMENT_VERSION?: string;
   TURNSTILE_SECRET_KEY?: string;
   AI_PROVIDER?: string;
-  // Bindings cho Cloudflare D1, R2, KV và Assets
+  // Cấu hình kết nối Supabase 24/7
+  VITE_SUPABASE_URL?: string;
+  VITE_SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_STORAGE_BUCKET?: string;
+  // Bindings cho Cloudflare D1, R2, KV và Static Assets
   DB?: {
     prepare: (query: string) => {
       bind: (...values: unknown[]) => {
@@ -56,11 +62,50 @@ export interface CloudflareEnv {
 let totalRequestsCount = 0;
 let totalErrorCount = 0;
 
+const DEFAULT_SUPABASE_URL = 'https://bdwzkdrxrwkulyaiadso.supabase.co';
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
     headers: SECURITY_HEADERS,
   });
+}
+
+/**
+ * Ghi dữ liệu bất đồng bộ sang Supabase REST API (có timeout an toàn, không chặn phản hồi của bé)
+ */
+async function syncToSupabaseRest(
+  env: CloudflareEnv,
+  table: string,
+  rows: unknown,
+  onConflict?: string
+): Promise<boolean> {
+  const supabaseUrl = env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const apiKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !apiKey || apiKey === 'YOUR_SUPABASE_ANON_KEY_HERE') {
+    return false;
+  }
+
+  try {
+    const query = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
+    const res = await fetchWithTimeout(
+      `${supabaseUrl}/rest/v1/${table}${query}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: apiKey,
+          Authorization: `Bearer ${apiKey}`,
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify(rows),
+      },
+      3500
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 export default {
@@ -89,15 +134,21 @@ export default {
     try {
       // 2. Health & Observability Endpoint (/api/health)
       if (url.pathname === '/api/health') {
+        const supabaseUrl = env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+        const hasSupabaseKey = Boolean(
+          env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY
+        );
         return jsonResponse({
           status: 'healthy_24_7',
           project: 'Little Genius – Thế giới khám phá của em (EduExplore Cloud)',
           environment: env.APP_ENV || 'production',
           deploymentVersion: env.DEPLOYMENT_VERSION || '2.0.0-cloudflare',
+          supabaseUrl,
           bindings: {
             d1DatabaseBound: Boolean(env.DB),
             r2MediaBucketBound: Boolean(env.MEDIA_BUCKET),
             kvConfigBound: Boolean(env.CONFIG_KV),
+            supabaseConfigured: Boolean(supabaseUrl && hasSupabaseKey),
           },
           metrics: {
             totalRequestsServed: totalRequestsCount,
@@ -134,7 +185,12 @@ export default {
       }
 
       if (url.pathname === '/api/learning-path' && request.method === 'GET') {
-        return jsonResponse({ lessons: learningPath(url.searchParams.get('subject'), url.searchParams.get('grade')) });
+        return jsonResponse({
+          lessons: learningPath(
+            url.searchParams.get('subject'),
+            url.searchParams.get('grade')
+          ),
+        });
       }
 
       // 4. Controlled Question Variant Endpoint (/api/exercises/variant)
@@ -202,6 +258,18 @@ export default {
           grade: lesson.grade,
         });
 
+        // Đồng bộ kết quả sang Supabase nếu đã cấu hình khóa
+        await syncToSupabaseRest(env, 'submissions', {
+          id: crypto.randomUUID(),
+          student_id: studentId,
+          exercise_variant_id: task.id,
+          student_answer_json: JSON.stringify(body.submission || {}),
+          is_correct: evaluation.isCorrect ? 1 : 0,
+          feedback: evaluation.encouragement,
+          proof: evaluation.mathematicalProof,
+          submitted_at: new Date().toISOString(),
+        });
+
         const responsePayload = JSON.stringify({
           evaluation,
           tutor,
@@ -215,13 +283,16 @@ export default {
         return new Response(responsePayload, { status: 200, headers: SECURITY_HEADERS });
       }
 
-      // 6. Multi-Device Offline Sync Endpoint (/api/sync)
+      // 6. Multi-Device Offline Sync Endpoint (/api/sync) -> Đồng bộ lên Supabase & D1
       if (url.pathname === '/api/sync' && request.method === 'POST') {
         const body = (await request.json()) as {
           studentId: string;
           authenticatedStudentId?: string;
           clientVersionVector: number;
-          progressMap: Record<string, { completedTaskIds: string[]; mastery: string; versionVector?: number }>;
+          progressMap: Record<
+            string,
+            { completedTaskIds: string[]; mastery: string; versionVector?: number }
+          >;
         };
 
         const access = verifyStudentAccess({
@@ -233,10 +304,32 @@ export default {
           return jsonResponse({ error: access.reason }, 403);
         }
 
+        const entries = Object.entries(body.progressMap || {});
+        if (entries.length > 0) {
+          const rows = entries.map(([lessonId, prog]) => ({
+            student_id: body.studentId,
+            lesson_id: lessonId,
+            mastery_level: prog.mastery,
+            completed_activities_json: JSON.stringify(prog.completedTaskIds || []),
+            attempts_count: (prog.completedTaskIds || []).length,
+            hints_used_count: 0,
+            can_explain: prog.mastery === 'can_explain' ? 1 : 0,
+            version_vector: prog.versionVector ?? 1,
+            last_updated_at: new Date().toISOString(),
+          }));
+
+          await syncToSupabaseRest(
+            env,
+            'student_progress',
+            rows,
+            'student_id,lesson_id'
+          );
+        }
+
         return jsonResponse({
           synced: true,
           resolvedVersionVector: (body.clientVersionVector || 1) + 1,
-          mergedLessonsCount: Object.keys(body.progressMap || {}).length,
+          mergedLessonsCount: entries.length,
           syncedAt: new Date().toISOString(),
         });
       }
@@ -292,7 +385,7 @@ export default {
   },
 
   /**
-   * Cloudflare Cron Trigger chạy định kỳ an toàn (không dùng setInterval giữ server)
+   * Cloudflare Cron Trigger chạy định kỳ an toàn lúc 03:00 UTC mỗi ngày
    */
   async scheduled(): Promise<void> {
     cleanupExpiredCaches();

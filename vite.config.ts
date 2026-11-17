@@ -9,11 +9,12 @@ import { EXERCISE_36_CATALOG, generateControlledMultiplicationVariant } from './
 
 export default defineConfig({
   build: {
-    chunkSizeWarningLimit: 650,
+    chunkSizeWarningLimit: 1000,
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
+            { name: 'vendor', test: /[/\\]node_modules[/\\]/ },
             { name: 'learning-content', test: /[/\\]src[/\\]learning[/\\](?:content|knowledge|expansion)[/\\]/ },
           ],
         },

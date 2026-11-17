@@ -25,6 +25,7 @@ import type {
   UserRole,
 } from './types/education.ts';
 import { computeMasteryLevel } from './engine/learningEngine.ts';
+import { syncStudentProfile24x7 } from './lib/supabase.ts';
 import { KNOWLEDGE_CARDS, knowledgeForLesson, knowledgeSubject } from './learning/knowledge/catalog.ts';
 import { recordActivity } from './learning/expansion/program.ts';
 import { recordReflection } from './learning/knowledge/notebook.ts';
@@ -269,6 +270,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profile));
+      if (Object.keys(profile.progressMap || {}).length > 0 || Object.keys(profile.creativeProjects || {}).length > 0) {
+        void syncStudentProfile24x7(profile);
+      }
     } catch {
       // ignore
     }
