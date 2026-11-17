@@ -1,0 +1,17 @@
+# wrangler.toml – Cấu hình Cloudflare Pages / Workers
+name = "little-genius-eduexplore"
+compatibility_date = "2026-11-16"
+
+# Build output cho Cloudflare Pages
+[build]
+command = "npm run build"
+functions = "functions"
+publish = "dist"
+
+[vars]
+APP_ENV = "production"
+DEPLOYMENT_VERSION = "2.0.0-production"
+
+[env.production]
+VITE_SUPABASE_URL = "https://bdwzkdrxrwkulyaiadso.supabase.co"
+VITE_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"
